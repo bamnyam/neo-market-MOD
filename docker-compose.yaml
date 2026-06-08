@@ -1,0 +1,31 @@
+services:
+  moderation-service:
+    build:
+      context: ./Moderation
+      dockerfile: Dockerfile
+    container_name: neo-market-moderation-service
+    command: uv run python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8003:8000"
+    env_file:
+      - ./Moderation/.env
+    environment:
+      POSTGRES_HOST: moderation-db
+      POSTGRES_PORT: 5432
+    volumes:
+      - ./Moderation:/usr/src/app
+    depends_on:
+      - moderation-db
+
+  moderation-db:
+    image: postgres:16
+    container_name: neo-market-moderation-db
+    env_file:
+      - ./Moderation/.env
+    ports:
+      - "5435:5432"
+    volumes:
+      - moderation_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  moderation_postgres_data:
