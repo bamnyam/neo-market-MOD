@@ -36,4 +36,3 @@ class ProductModerationFieldReport(models.Model):
 
     def __str__(self) -> str:
         return f"{self.field_name}: {self.product_moderation_id}"
-
