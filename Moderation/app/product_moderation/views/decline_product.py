@@ -5,21 +5,21 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from app.product_moderation.api import (
-    ApproveProductRequestSerializer,
     B2BClient,
+    DeclineProductRequestSerializer,
 )
 from app.product_moderation.services import (
     ModerationDecisionError,
-    approve_product,
+    decline_product,
     get_moderator_id,
 )
 
 
-class ApproveProductView(APIView):
+class DeclineProductView(APIView):
     b2b_client_class = B2BClient
 
     def post(self, request, product_id: uuid.UUID) -> Response:
-        serializer = ApproveProductRequestSerializer(data=request.data)
+        serializer = DeclineProductRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         moderator_id = get_moderator_id(request)
@@ -30,10 +30,12 @@ class ApproveProductView(APIView):
             )
 
         try:
-            result = approve_product(
+            result = decline_product(
                 product_id=product_id,
                 moderator_id=moderator_id,
-                moderator_comment=serializer.validated_data.get("moderator_comment"),
+                blocking_reason_id=serializer.validated_data["blocking_reason_id"],
+                moderator_comment=serializer.validated_data["moderator_comment"],
+                field_reports=serializer.validated_data["field_reports"],
                 b2b_client=self.b2b_client_class(),
             )
         except ModerationDecisionError as exc:
