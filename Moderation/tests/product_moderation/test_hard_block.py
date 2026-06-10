@@ -147,15 +147,18 @@ def test_edited_event_on_hard_blocked_is_ignored(api_client, create_moderation):
     response = api_client.post(
         reverse("product-event"),
         {
-            "event": "EDITED",
-            "product_id": str(moderation.product_id),
-            "seller_id": str(moderation.seller_id),
-            "date": "2026-03-15T14:30:00.000Z",
+            "event_type": "PRODUCT_EDITED",
+            "idempotency_key": str(uuid.uuid4()),
+            "occurred_at": "2026-03-15T14:30:00.000Z",
+            "payload": {
+                "product_id": str(moderation.product_id),
+                "seller_id": str(moderation.seller_id),
+            },
         },
         format="json",
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     moderation.refresh_from_db()
     assert moderation.status == ProductModeration.Status.HARD_BLOCKED
     assert moderation.json_after == {"title": "Before"}
@@ -176,15 +179,18 @@ def test_deleted_event_removes_hard_blocked(api_client, create_moderation):
     response = api_client.post(
         reverse("product-event"),
         {
-            "event": "DELETED",
-            "product_id": str(moderation.product_id),
-            "seller_id": str(uuid.uuid4()),
-            "date": "2026-03-15T14:30:00.000Z",
+            "event_type": "PRODUCT_DELETED",
+            "idempotency_key": str(uuid.uuid4()),
+            "occurred_at": "2026-03-15T14:30:00.000Z",
+            "payload": {
+                "product_id": str(moderation.product_id),
+                "seller_id": str(uuid.uuid4()),
+            },
         },
         format="json",
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert not ProductModeration.objects.filter(id=moderation.id).exists()
     assert not ProductModerationFieldReport.objects.filter(
         product_moderation_id=moderation.id

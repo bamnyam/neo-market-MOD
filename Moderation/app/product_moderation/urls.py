@@ -18,7 +18,7 @@ urlpatterns = [
         name="block-ticket",
     ),
     path(
-        "api/v1/events/product",
+        "api/v1/b2b/events",
         ProductEventView.as_view(),
         name="product-event",
     ),

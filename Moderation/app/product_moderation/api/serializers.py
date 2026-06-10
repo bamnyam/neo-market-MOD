@@ -21,8 +21,15 @@ class BlockDecisionRequestSerializer(serializers.Serializer):
 DeclineProductRequestSerializer = BlockDecisionRequestSerializer
 
 
-class ProductEventSerializer(serializers.Serializer):
-    event = serializers.ChoiceField(choices=["CREATED", "EDITED", "DELETED"])
+class ProductEventPayloadSerializer(serializers.Serializer):
     product_id = serializers.UUIDField()
     seller_id = serializers.UUIDField()
-    date = serializers.DateTimeField(required=False)
+
+
+class ProductEventSerializer(serializers.Serializer):
+    event_type = serializers.ChoiceField(
+        choices=["PRODUCT_CREATED", "PRODUCT_EDITED", "PRODUCT_DELETED"]
+    )
+    idempotency_key = serializers.UUIDField()
+    occurred_at = serializers.DateTimeField()
+    payload = ProductEventPayloadSerializer()

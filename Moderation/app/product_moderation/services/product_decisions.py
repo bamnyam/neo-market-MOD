@@ -184,20 +184,20 @@ def decline_product(
 
 def handle_product_event(
     *,
-    event: str,
+    event_type: str,
     product_id: uuid.UUID,
     seller_id: uuid.UUID,
     b2b_client,
 ) -> None:
-    if event == "EDITED":
+    if event_type == "PRODUCT_EDITED":
         _handle_edited_event(product_id=product_id, b2b_client=b2b_client)
         return
 
-    if event == "DELETED":
+    if event_type == "PRODUCT_DELETED":
         ProductModeration.objects.filter(product_id=product_id).delete()
         return
 
-    if event == "CREATED":
+    if event_type == "PRODUCT_CREATED":
         _handle_created_event(
             product_id=product_id,
             seller_id=seller_id,
