@@ -12,7 +12,7 @@ class ProductModeration(models.Model):
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
         IN_REVIEW = "IN_REVIEW", "In review"
-        MODERATED = "MODERATED", "Moderated"
+        APPROVED = "APPROVED", "Approved"
         BLOCKED = "BLOCKED", "Blocked"
         HARD_BLOCKED = "HARD_BLOCKED", "Hard blocked"
 
@@ -24,8 +24,8 @@ class ProductModeration(models.Model):
 
     ALLOWED_STATUS_TRANSITIONS = {
         Status.PENDING: {Status.IN_REVIEW},
-        Status.IN_REVIEW: {Status.MODERATED, Status.BLOCKED, Status.HARD_BLOCKED},
-        Status.MODERATED: {Status.PENDING},
+        Status.IN_REVIEW: {Status.APPROVED, Status.BLOCKED, Status.HARD_BLOCKED},
+        Status.APPROVED: {Status.PENDING},
         Status.BLOCKED: {Status.PENDING},
         Status.HARD_BLOCKED: set(),
     }
@@ -127,8 +127,8 @@ class ProductModeration(models.Model):
     ) -> int:
         if old_status == cls.Status.BLOCKED:
             return cls.QueuePriority.FIXED_AFTER_BLOCK
-        if old_status == cls.Status.MODERATED and total_active_quantity > 0:
+        if old_status == cls.Status.APPROVED and total_active_quantity > 0:
             return cls.QueuePriority.EDITED_IN_STOCK
-        if old_status == cls.Status.MODERATED and total_active_quantity == 0:
+        if old_status == cls.Status.APPROVED and total_active_quantity == 0:
             return cls.QueuePriority.EDITED_OUT_OF_STOCK
         return current_queue_priority or cls.QueuePriority.NEW_PRODUCTS

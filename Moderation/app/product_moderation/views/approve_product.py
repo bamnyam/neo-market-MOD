@@ -20,22 +20,24 @@ logger = logging.getLogger(__name__)
 class ApproveProductView(APIView):
     b2b_client_class = B2BClient
 
-    def post(self, request, product_id: uuid.UUID) -> Response:
+    def post(self, request, ticket_id: uuid.UUID) -> Response:
         serializer = ApproveProductRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         moderator_id = self._get_moderator_id(request)
         if moderator_id is None:
-            return Response(
-                {"error": "Moderator id is required"},
-                status=status.HTTP_401_UNAUTHORIZED,
+            return self._error(
+                "UNAUTHORIZED",
+                "Moderator id is required",
+                status.HTTP_401_UNAUTHORIZED,
             )
 
-        moderation = self._get_moderation(product_id)
+        moderation = self._get_moderation(ticket_id)
         if moderation is None:
-            return Response(
-                {"error": "Product not found in moderation queue"},
-                status=status.HTTP_404_NOT_FOUND,
+            return self._error(
+                "TICKET_NOT_FOUND",
+                "Ticket not found",
+                status.HTTP_404_NOT_FOUND,
             )
 
         error_response = self._validate_moderation(moderation, moderator_id)
@@ -45,36 +47,36 @@ class ApproveProductView(APIView):
         client = self.b2b_client_class()
 
         try:
-            product = client.get_product(str(product_id))
+            product = client.get_product(str(moderation.product_id))
         except B2BClientError:
             logger.exception(
-                "Cannot approve product %s: B2B product check failed", product_id
+                "Cannot approve ticket %s: B2B product check failed", ticket_id
             )
-            return Response(
-                {"error": "Failed to check product in B2B"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return self._error(
+                "B2B_PRODUCT_CHECK_FAILED",
+                "Failed to check product in B2B",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         if len(product.get("skus") or []) == 0:
-            return Response(
-                {"error": "Product has no SKUs, cannot approve"},
-                status=status.HTTP_409_CONFLICT,
+            return self._error(
+                "PRODUCT_HAS_NO_SKUS",
+                "Product has no SKUs, cannot approve",
+                status.HTTP_409_CONFLICT,
             )
 
         try:
             with transaction.atomic():
                 moderation = ProductModeration.objects.select_for_update().get(
-                    product_id=product_id
+                    id=ticket_id
                 )
                 error_response = self._validate_moderation(moderation, moderator_id)
                 if error_response is not None:
                     return error_response
 
-                moderation.status = ProductModeration.Status.MODERATED
+                moderation.status = ProductModeration.Status.APPROVED
                 moderation.date_moderation = timezone.now()
-                moderation.moderator_comment = serializer.validated_data.get(
-                    "moderator_comment"
-                )
+                moderation.moderator_comment = serializer.validated_data.get("comment")
                 moderation.blocking_reason = None
                 moderation.save(
                     update_fields=[
@@ -87,23 +89,18 @@ class ApproveProductView(APIView):
                 )
                 moderation.field_reports.all().delete()
                 client.send_moderation_event(
-                    str(product_id),
-                    ProductModeration.Status.MODERATED,
+                    str(moderation.product_id),
+                    "MODERATED",
                 )
         except B2BClientError:
-            logger.exception("Cannot approve product %s: B2B event failed", product_id)
-            return Response(
-                {"error": "Failed to send moderation event to B2B"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            logger.exception("Cannot approve ticket %s: B2B event failed", ticket_id)
+            return self._error(
+                "B2B_EVENT_FAILED",
+                "Failed to send moderation event to B2B",
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        return Response(
-            {
-                "product_id": str(product_id),
-                "status": ProductModeration.Status.MODERATED,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response(self._ticket_response(moderation), status=status.HTTP_200_OK)
 
     def _get_moderator_id(self, request) -> uuid.UUID | None:
         user = getattr(request, "user", None)
@@ -122,9 +119,9 @@ class ApproveProductView(APIView):
         except ValueError:
             return None
 
-    def _get_moderation(self, product_id: uuid.UUID) -> ProductModeration | None:
+    def _get_moderation(self, ticket_id: uuid.UUID) -> ProductModeration | None:
         try:
-            return ProductModeration.objects.get(product_id=product_id)
+            return ProductModeration.objects.get(id=ticket_id)
         except ProductModeration.DoesNotExist:
             return None
 
@@ -134,21 +131,52 @@ class ApproveProductView(APIView):
         moderator_id: uuid.UUID,
     ) -> Response | None:
         if moderation.status == ProductModeration.Status.HARD_BLOCKED:
-            return Response(
-                {"error": "Product is permanently blocked"},
-                status=status.HTTP_409_CONFLICT,
+            return self._error(
+                "TICKET_PERMANENTLY_BLOCKED",
+                "Product is permanently blocked",
+                status.HTTP_409_CONFLICT,
             )
 
         if moderation.status != ProductModeration.Status.IN_REVIEW:
-            return Response(
-                {"error": "Product is not in review status"},
-                status=status.HTTP_409_CONFLICT,
+            return self._error(
+                "TICKET_WRONG_STATUS",
+                "Ticket is not in review status",
+                status.HTTP_409_CONFLICT,
             )
 
         if moderation.moderator_id != moderator_id:
-            return Response(
-                {"error": "This moderation card is not assigned to you"},
-                status=status.HTTP_403_FORBIDDEN,
+            return self._error(
+                "TICKET_NOT_ASSIGNED_TO_YOU",
+                "This ticket is not assigned to you",
+                status.HTTP_409_CONFLICT,
             )
 
         return None
+
+    def _ticket_response(self, moderation: ProductModeration) -> dict:
+        return {
+            "id": str(moderation.id),
+            "product_id": str(moderation.product_id),
+            "seller_id": str(moderation.seller_id),
+            "kind": "CREATE" if moderation.json_before is None else "EDIT",
+            "status": moderation.status,
+            "queue_priority": moderation.queue_priority,
+            "assigned_moderator_id": (
+                str(moderation.moderator_id) if moderation.moderator_id else None
+            ),
+            "claimed_at": None,
+            "claim_expires_at": None,
+            "decision_at": (
+                moderation.date_moderation.isoformat()
+                if moderation.date_moderation
+                else None
+            ),
+            "created_at": moderation.date_created.isoformat(),
+            "updated_at": moderation.date_updated.isoformat(),
+        }
+
+    def _error(self, code: str, message: str, response_status: int) -> Response:
+        return Response(
+            {"code": code, "message": message},
+            status=response_status,
+        )

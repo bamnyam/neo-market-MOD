@@ -6,6 +6,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from django.conf import settings
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +38,17 @@ class B2BClient:
             logger.exception("Failed to get product %s from B2B", product_id)
             raise B2BClientError("Failed to get product from B2B") from exc
 
-    def send_moderation_event(self, product_id: str, status: str) -> None:
+    def send_moderation_event(self, product_id: str, event_type: str) -> None:
         payload = json.dumps(
             {
+                "event_type": event_type,
                 "idempotency_key": str(uuid.uuid4()),
+                "occurred_at": timezone.now().isoformat().replace("+00:00", "Z"),
                 "product_id": product_id,
-                "status": status,
             }
         ).encode("utf-8")
         request = Request(
-            f"{self._base_url()}/api/v1/events/moderation",
+            f"{self._base_url()}/api/v1/moderation/events",
             method="POST",
             data=payload,
             headers={
