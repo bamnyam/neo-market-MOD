@@ -42,12 +42,14 @@ class B2BClient:
         self,
         product_id: str,
         event_type: str,
+        hard_block: bool = False,
     ) -> None:
         payload_data: dict[str, Any] = {
             "event_type": event_type,
             "idempotency_key": str(uuid.uuid4()),
             "occurred_at": timezone.now().isoformat().replace("+00:00", "Z"),
             "product_id": product_id,
+            "hard_block": hard_block,
         }
 
         payload = json.dumps(payload_data).encode("utf-8")

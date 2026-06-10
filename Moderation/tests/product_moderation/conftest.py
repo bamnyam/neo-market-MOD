@@ -16,7 +16,9 @@ class SuccessfulApproveB2BClient:
     def get_product(self, product_id: str) -> dict:
         return {"id": product_id, "skus": [{"id": str(uuid.uuid4())}]}
 
-    def send_moderation_event(self, product_id: str, event_type: str) -> None:
+    def send_moderation_event(
+        self, product_id: str, event_type: str, hard_block: bool = False
+    ) -> None:
         return None
 
 
@@ -26,24 +28,31 @@ class NoSkuB2BClient(SuccessfulApproveB2BClient):
 
 
 class EventErrorApproveB2BClient(SuccessfulApproveB2BClient):
-    def send_moderation_event(self, product_id: str, event_type: str) -> None:
+    def send_moderation_event(
+        self, product_id: str, event_type: str, hard_block: bool = False
+    ) -> None:
         raise B2BClientError("event failed")
 
 
 class SuccessfulDeclineB2BClient:
     events = []
 
-    def send_moderation_event(self, product_id: str, event_type: str) -> None:
+    def send_moderation_event(
+        self, product_id: str, event_type: str, hard_block: bool = False
+    ) -> None:
         self.events.append(
             {
                 "product_id": product_id,
                 "event_type": event_type,
+                "hard_block": hard_block,
             }
         )
 
 
 class EventErrorDeclineB2BClient(SuccessfulDeclineB2BClient):
-    def send_moderation_event(self, product_id: str, event_type: str) -> None:
+    def send_moderation_event(
+        self, product_id: str, event_type: str, hard_block: bool = False
+    ) -> None:
         raise B2BClientError("event failed")
 
 

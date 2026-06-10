@@ -45,6 +45,7 @@ def test_hard_block_transitions_to_terminal_and_emits_event(
         {
             "product_id": str(moderation.product_id),
             "event_type": ProductModeration.Status.BLOCKED,
+            "hard_block": True,
         }
     ]
 
@@ -102,6 +103,7 @@ def test_hard_block_event_carries_hard_block_true(
     assert response.status_code == 200
     event = successful_decline_b2b_client_class.events[0]
     assert event["event_type"] == ProductModeration.Status.BLOCKED
+    assert event["hard_block"] is True
 
 
 @pytest.mark.django_db

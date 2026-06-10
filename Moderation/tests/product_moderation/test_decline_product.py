@@ -77,6 +77,7 @@ def test_decline_product_success(
         {
             "product_id": str(moderation.product_id),
             "event_type": ProductModeration.Status.BLOCKED,
+            "hard_block": False,
         }
     ]
 
