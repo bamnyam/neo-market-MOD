@@ -4,7 +4,7 @@ from app.product_moderation.models import ProductModerationFieldReport
 
 
 class ApproveProductRequestSerializer(serializers.Serializer):
-    moderator_comment = serializers.CharField(required=False, allow_blank=True)
+    comment = serializers.CharField(required=False, allow_blank=True, max_length=2000)
 
 
 class FieldReportSerializer(serializers.Serializer):

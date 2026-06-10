@@ -20,20 +20,26 @@ def test_approve_product_success(api_client, create_moderation):
     )
 
     response = api_client.post(
-        reverse("approve-product", kwargs={"product_id": moderation.product_id}),
-        {"moderator_comment": "Product meets requirements"},
+        reverse("approve-product", kwargs={"ticket_id": moderation.id}),
+        {"comment": "Product meets requirements"},
         format="json",
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "product_id": str(moderation.product_id),
-        "status": ProductModeration.Status.MODERATED,
-    }
+    body = response.json()
+    assert body["id"] == str(moderation.id)
+    assert body["product_id"] == str(moderation.product_id)
+    assert body["seller_id"] == str(moderation.seller_id)
+    assert body["kind"] == "CREATE"
+    assert body["status"] == ProductModeration.Status.APPROVED
+    assert body["queue_priority"] == moderation.queue_priority
+    assert body["assigned_moderator_id"] == str(moderation.moderator_id)
+    assert body["decision_at"] is not None
+    assert body["created_at"] is not None
 
     moderation.refresh_from_db()
-    assert moderation.status == ProductModeration.Status.MODERATED
+    assert moderation.status == ProductModeration.Status.APPROVED
     assert moderation.date_moderation is not None
     assert moderation.moderator_comment == "Product meets requirements"
     assert moderation.blocking_reason_id is None
@@ -43,14 +49,17 @@ def test_approve_product_success(api_client, create_moderation):
 @pytest.mark.django_db
 def test_approve_product_not_found(api_client):
     response = api_client.post(
-        reverse("approve-product", kwargs={"product_id": uuid.uuid4()}),
+        reverse("approve-product", kwargs={"ticket_id": uuid.uuid4()}),
         {},
         format="json",
         HTTP_X_MODERATOR_ID=str(uuid.uuid4()),
     )
 
     assert response.status_code == 404
-    assert response.json() == {"error": "Product not found in moderation queue"}
+    assert response.json() == {
+        "code": "TICKET_NOT_FOUND",
+        "message": "Ticket not found",
+    }
 
 
 @pytest.mark.django_db
@@ -58,14 +67,17 @@ def test_approve_product_rejects_hard_blocked(api_client, create_moderation):
     moderation = create_moderation(status=ProductModeration.Status.HARD_BLOCKED)
 
     response = api_client.post(
-        reverse("approve-product", kwargs={"product_id": moderation.product_id}),
+        reverse("approve-product", kwargs={"ticket_id": moderation.id}),
         {},
         format="json",
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
     )
 
-    assert response.status_code == 403
-    assert response.json() == {"error": "Product is permanently blocked"}
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "TICKET_PERMANENTLY_BLOCKED",
+        "message": "Product is permanently blocked",
+    }
 
 
 @pytest.mark.django_db
@@ -73,14 +85,17 @@ def test_approve_product_rejects_not_in_review(api_client, create_moderation):
     moderation = create_moderation(status=ProductModeration.Status.PENDING)
 
     response = api_client.post(
-        reverse("approve-product", kwargs={"product_id": moderation.product_id}),
+        reverse("approve-product", kwargs={"ticket_id": moderation.id}),
         {},
         format="json",
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
     )
 
     assert response.status_code == 409
-    assert response.json() == {"error": "Product is not in review"}
+    assert response.json() == {
+        "code": "TICKET_WRONG_STATUS",
+        "message": "Ticket is not in review status",
+    }
 
 
 @pytest.mark.django_db
@@ -88,14 +103,17 @@ def test_approve_product_rejects_other_moderator(api_client, create_moderation):
     moderation = create_moderation()
 
     response = api_client.post(
-        reverse("approve-product", kwargs={"product_id": moderation.product_id}),
+        reverse("approve-product", kwargs={"ticket_id": moderation.id}),
         {},
         format="json",
         HTTP_X_MODERATOR_ID=str(uuid.uuid4()),
     )
 
-    assert response.status_code == 403
-    assert response.json() == {"error": "This moderation card is not assigned to you"}
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "TICKET_NOT_ASSIGNED_TO_YOU",
+        "message": "This ticket is not assigned to you",
+    }
 
 
 @pytest.mark.django_db
@@ -108,14 +126,17 @@ def test_approve_product_rejects_product_without_skus(
     moderation = create_moderation()
 
     response = api_client.post(
-        reverse("approve-product", kwargs={"product_id": moderation.product_id}),
+        reverse("approve-product", kwargs={"ticket_id": moderation.id}),
         {},
         format="json",
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
     )
 
     assert response.status_code == 409
-    assert response.json() == {"error": "Product has no SKUs, cannot approve"}
+    assert response.json() == {
+        "code": "PRODUCT_HAS_NO_SKUS",
+        "message": "Product has no SKUs, cannot approve",
+    }
 
 
 @pytest.mark.django_db
@@ -133,13 +154,17 @@ def test_approve_product_rolls_back_when_event_fails(
     )
 
     response = api_client.post(
-        reverse("approve-product", kwargs={"product_id": moderation.product_id}),
-        {"moderator_comment": "Ok"},
+        reverse("approve-product", kwargs={"ticket_id": moderation.id}),
+        {"comment": "Ok"},
         format="json",
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
     )
 
     assert response.status_code == 500
+    assert response.json() == {
+        "code": "B2B_EVENT_FAILED",
+        "message": "Failed to send moderation event to B2B",
+    }
 
     moderation.refresh_from_db()
     assert moderation.status == ProductModeration.Status.IN_REVIEW

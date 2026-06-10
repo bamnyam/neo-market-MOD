@@ -6,6 +6,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from django.conf import settings
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -40,18 +41,18 @@ class B2BClient:
     def send_moderation_event(
         self,
         product_id: str,
-        status: str,
+        event_type: str,
         *,
         hard_block: bool | None = None,
         blocking_reason: dict[str, Any] | None = None,
         field_reports: list[dict[str, Any]] | None = None,
     ) -> None:
         payload_data: dict[str, Any] = {
+            "event_type": event_type,
+            "idempotency_key": str(uuid.uuid4()),
+            "occurred_at": timezone.now().isoformat().replace("+00:00", "Z"),
             "product_id": product_id,
-            "status": status,
         }
-        if hard_block is None and blocking_reason is None and field_reports is None:
-            payload_data["idempotency_key"] = str(uuid.uuid4())
         if hard_block is not None:
             payload_data["hard_block"] = hard_block
         if blocking_reason is not None:
@@ -61,7 +62,7 @@ class B2BClient:
 
         payload = json.dumps(payload_data).encode("utf-8")
         request = Request(
-            f"{self._base_url()}/api/v1/events/moderation",
+            f"{self._base_url()}/api/v1/moderation/events",
             method="POST",
             data=payload,
             headers={
@@ -72,7 +73,9 @@ class B2BClient:
         try:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 if response.status >= 400:
-                    raise B2BClientError(f"B2B moderation event failed: {response.status}")
+                    raise B2BClientError(
+                        f"B2B moderation event failed: {response.status}"
+                    )
         except (HTTPError, URLError, TimeoutError) as exc:
             logger.exception(
                 "Failed to send moderation event for product %s to B2B", product_id

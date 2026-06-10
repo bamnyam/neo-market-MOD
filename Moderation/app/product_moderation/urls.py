@@ -8,7 +8,7 @@ from app.product_moderation.views import (
 
 urlpatterns = [
     path(
-        "api/v1/products/<uuid:product_id>/approve",
+        "api/v1/tickets/<uuid:ticket_id>/approve",
         ApproveProductView.as_view(),
         name="approve-product",
     ),

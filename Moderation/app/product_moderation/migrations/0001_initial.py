@@ -86,7 +86,6 @@ def remove_blocking_reasons(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = []
