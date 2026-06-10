@@ -41,6 +41,7 @@ def test_b2b_client_sends_moderated_event_contract(monkeypatch):
     assert uuid.UUID(payload["idempotency_key"])
     assert payload["occurred_at"]
     assert payload["product_id"] == product_id
+    assert payload["hard_block"] is False
 
 
 @override_settings(B2B_URL="http://b2b.example", MOD_TO_B2B_KEY="secret")
@@ -54,7 +55,7 @@ def test_b2b_client_sends_blocked_event_contract(monkeypatch):
     monkeypatch.setattr(b2b_client_module, "urlopen", fake_urlopen)
 
     product_id = str(uuid.uuid4())
-    B2BClient().send_moderation_event(product_id, "BLOCKED")
+    B2BClient().send_moderation_event(product_id, "BLOCKED", hard_block=True)
 
     request = requests[0]
     payload = loads(request.data.decode("utf-8"))
@@ -67,9 +68,11 @@ def test_b2b_client_sends_blocked_event_contract(monkeypatch):
     assert uuid.UUID(payload["idempotency_key"])
     assert payload["occurred_at"]
     assert payload["product_id"] == product_id
+    assert payload["hard_block"] is True
     assert set(payload) == {
         "event_type",
         "idempotency_key",
         "occurred_at",
         "product_id",
+        "hard_block",
     }

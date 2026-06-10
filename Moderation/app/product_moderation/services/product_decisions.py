@@ -170,6 +170,7 @@ def decline_product(
             b2b_client.send_moderation_event(
                 str(moderation.product_id),
                 ProductModeration.Status.BLOCKED,
+                hard_block=target_status == ProductModeration.Status.HARD_BLOCKED,
             )
     except B2BClientError as exc:
         logger.exception("Cannot block ticket %s: B2B event failed", ticket_id)
