@@ -54,24 +54,7 @@ def test_b2b_client_sends_blocked_event_contract(monkeypatch):
     monkeypatch.setattr(b2b_client_module, "urlopen", fake_urlopen)
 
     product_id = str(uuid.uuid4())
-    reason_id = str(uuid.uuid4())
-    B2BClient().send_moderation_event(
-        product_id,
-        "BLOCKED",
-        hard_block=False,
-        blocking_reason={
-            "id": reason_id,
-            "title": "Описание не соответствует товару",
-            "comment": "Описание и фото не соответствуют товару",
-        },
-        field_reports=[
-            {
-                "field_name": "description",
-                "sku_id": None,
-                "comment": "Текст описания скопирован с другого товара",
-            }
-        ],
-    )
+    B2BClient().send_moderation_event(product_id, "BLOCKED")
 
     request = requests[0]
     payload = loads(request.data.decode("utf-8"))
@@ -84,16 +67,9 @@ def test_b2b_client_sends_blocked_event_contract(monkeypatch):
     assert uuid.UUID(payload["idempotency_key"])
     assert payload["occurred_at"]
     assert payload["product_id"] == product_id
-    assert payload["hard_block"] is False
-    assert payload["blocking_reason"] == {
-        "id": reason_id,
-        "title": "Описание не соответствует товару",
-        "comment": "Описание и фото не соответствуют товару",
+    assert set(payload) == {
+        "event_type",
+        "idempotency_key",
+        "occurred_at",
+        "product_id",
     }
-    assert payload["field_reports"] == [
-        {
-            "field_name": "description",
-            "sku_id": None,
-            "comment": "Текст описания скопирован с другого товара",
-        }
-    ]

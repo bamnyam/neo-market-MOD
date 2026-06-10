@@ -30,6 +30,9 @@ class ProductEventView(APIView):
                 b2b_client=self.b2b_client_class(),
             )
         except ModerationDecisionError as exc:
-            return Response({"error": exc.message}, status=exc.status_code)
+            return Response(
+                {"code": exc.code, "message": exc.message},
+                status=exc.status_code,
+            )
 
         return Response(status=status.HTTP_200_OK)

@@ -109,6 +109,10 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "app.product_moderation.api.exceptions.contract_exception_handler",
+}
+
 B2B_URL = os.getenv("B2B_URL", "").rstrip("/")
 MOD_SERVICE_KEY = os.getenv("MOD_SERVICE_KEY", "")
 MOD_TO_B2B_KEY = os.getenv("MOD_TO_B2B_KEY", "")

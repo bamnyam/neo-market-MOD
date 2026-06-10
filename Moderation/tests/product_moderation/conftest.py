@@ -33,18 +33,17 @@ class EventErrorApproveB2BClient(SuccessfulApproveB2BClient):
 class SuccessfulDeclineB2BClient:
     events = []
 
-    def send_moderation_event(self, product_id: str, event_type: str, **payload) -> None:
+    def send_moderation_event(self, product_id: str, event_type: str) -> None:
         self.events.append(
             {
                 "product_id": product_id,
                 "event_type": event_type,
-                **payload,
             }
         )
 
 
 class EventErrorDeclineB2BClient(SuccessfulDeclineB2BClient):
-    def send_moderation_event(self, product_id: str, event_type: str, **payload) -> None:
+    def send_moderation_event(self, product_id: str, event_type: str) -> None:
         raise B2BClientError("event failed")
 
 

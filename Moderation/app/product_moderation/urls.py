@@ -13,9 +13,9 @@ urlpatterns = [
         name="approve-product",
     ),
     path(
-        "api/v1/products/<uuid:product_id>/decline",
+        "api/v1/tickets/<uuid:ticket_id>/block",
         DeclineProductView.as_view(),
-        name="decline-product",
+        name="block-ticket",
     ),
     path(
         "api/v1/events/product",

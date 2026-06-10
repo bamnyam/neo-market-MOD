@@ -109,7 +109,7 @@ def test_approve_product_rejects_other_moderator(api_client, create_moderation):
         HTTP_X_MODERATOR_ID=str(uuid.uuid4()),
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 403
     assert response.json() == {
         "code": "TICKET_NOT_ASSIGNED_TO_YOU",
         "message": "This ticket is not assigned to you",

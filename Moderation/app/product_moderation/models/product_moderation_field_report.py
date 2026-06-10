@@ -24,6 +24,9 @@ class ProductModerationFieldReport(models.Model):
     field_name = models.CharField(max_length=32, choices=FieldName.choices)
     sku_id = models.UUIDField(null=True, blank=True)
     comment = models.TextField()
+    field_path = models.CharField(max_length=255, null=True, blank=True)
+    message = models.TextField(null=True, blank=True)
+    severity = models.CharField(max_length=32, null=True, blank=True)
     date_created = models.DateTimeField(auto_now_add=True)
 
     class Meta:

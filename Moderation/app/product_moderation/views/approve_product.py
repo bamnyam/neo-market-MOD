@@ -30,10 +30,9 @@ class ApproveProductView(APIView):
 
         moderator_id = get_moderator_id(request)
         if moderator_id is None:
-            return self._error(
-                "UNAUTHORIZED",
-                "Moderator id is required",
-                status.HTTP_401_UNAUTHORIZED,
+            return Response(
+                {"code": "UNAUTHORIZED", "message": "Moderator id is required"},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
         try:

@@ -114,34 +114,34 @@ def approve_product(
 
 def decline_product(
     *,
-    product_id: uuid.UUID,
+    ticket_id: uuid.UUID,
     moderator_id: uuid.UUID,
-    blocking_reason_id: uuid.UUID,
-    moderator_comment: str,
+    blocking_reason_ids: list[uuid.UUID],
     field_reports: list[dict[str, Any]],
     b2b_client,
-) -> dict[str, str]:
-    moderation = _get_moderation(product_id)
+) -> dict[str, Any]:
+    moderation = _get_ticket(ticket_id)
     _validate_moderation(moderation, moderator_id)
 
-    blocking_reason = _get_blocking_reason(blocking_reason_id)
+    blocking_reasons = _get_blocking_reasons(blocking_reason_ids)
+    blocking_reason = blocking_reasons[0]
     target_status = (
         ProductModeration.Status.HARD_BLOCKED
-        if blocking_reason.hard_block
+        if any(reason.hard_block for reason in blocking_reasons)
         else ProductModeration.Status.BLOCKED
     )
 
     try:
         with transaction.atomic():
             moderation = ProductModeration.objects.select_for_update().get(
-                product_id=product_id
+                id=ticket_id
             )
             _validate_moderation(moderation, moderator_id)
 
             moderation.status = target_status
             moderation.date_moderation = timezone.now()
             moderation.blocking_reason = blocking_reason
-            moderation.moderator_comment = moderator_comment
+            moderation.moderator_comment = None
             moderation.save(
                 update_fields=[
                     "status",
@@ -157,47 +157,29 @@ def decline_product(
                 [
                     ProductModerationFieldReport(
                         product_moderation=moderation,
-                        field_name=field_report["field_name"],
-                        sku_id=field_report.get("sku_id"),
-                        comment=field_report["comment"],
+                        field_name=_legacy_field_name(field_report["field_path"]),
+                        comment=field_report["message"],
+                        field_path=field_report["field_path"],
+                        message=field_report["message"],
+                        severity=field_report["severity"],
                     )
                     for field_report in field_reports
                 ]
             )
 
             b2b_client.send_moderation_event(
-                str(product_id),
+                str(moderation.product_id),
                 ProductModeration.Status.BLOCKED,
-                hard_block=blocking_reason.hard_block,
-                blocking_reason={
-                    "id": str(blocking_reason.id),
-                    "title": blocking_reason.title,
-                    "comment": moderator_comment,
-                },
-                field_reports=[
-                    {
-                        "field_name": field_report["field_name"],
-                        "sku_id": (
-                            str(field_report["sku_id"])
-                            if field_report.get("sku_id") is not None
-                            else None
-                        ),
-                        "comment": field_report["comment"],
-                    }
-                    for field_report in field_reports
-                ],
             )
     except B2BClientError as exc:
-        logger.exception("Cannot decline product %s: B2B event failed", product_id)
+        logger.exception("Cannot block ticket %s: B2B event failed", ticket_id)
         raise ModerationDecisionError(
             "Failed to send moderation event to B2B",
             HTTPStatus.INTERNAL_SERVER_ERROR,
+            "B2B_EVENT_FAILED",
         ) from exc
 
-    return {
-        "product_id": str(product_id),
-        "status": target_status,
-    }
+    return _ticket_response(moderation)
 
 
 def handle_product_event(
@@ -254,7 +236,32 @@ def _get_blocking_reason(blocking_reason_id: uuid.UUID) -> ProductBlockingReason
         raise ModerationDecisionError(
             "Blocking reason not found",
             HTTPStatus.BAD_REQUEST,
+            "BLOCKING_REASON_NOT_FOUND",
         ) from exc
+
+
+def _get_blocking_reasons(
+    blocking_reason_ids: list[uuid.UUID],
+) -> list[ProductBlockingReason]:
+    reasons_by_id = {
+        reason.id: reason
+        for reason in ProductBlockingReason.objects.filter(id__in=blocking_reason_ids)
+    }
+    missing_reason_ids = [
+        reason_id for reason_id in blocking_reason_ids if reason_id not in reasons_by_id
+    ]
+    if missing_reason_ids:
+        raise ModerationDecisionError(
+            "Blocking reason not found",
+            HTTPStatus.BAD_REQUEST,
+            "BLOCKING_REASON_NOT_FOUND",
+        )
+    return [reasons_by_id[reason_id] for reason_id in blocking_reason_ids]
+
+
+def _legacy_field_name(field_path: str) -> str:
+    legacy_names = {choice.value for choice in ProductModerationFieldReport.FieldName}
+    return field_path if field_path in legacy_names else ProductModerationFieldReport.FieldName.TITLE
 
 
 def _handle_created_event(
@@ -372,7 +379,7 @@ def _validate_moderation(
     if moderation.moderator_id != moderator_id:
         raise ModerationDecisionError(
             "This ticket is not assigned to you",
-            HTTPStatus.CONFLICT,
+            HTTPStatus.FORBIDDEN,
             "TICKET_NOT_ASSIGNED_TO_YOU",
         )
 

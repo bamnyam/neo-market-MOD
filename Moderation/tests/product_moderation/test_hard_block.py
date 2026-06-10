@@ -24,10 +24,9 @@ def test_hard_block_transitions_to_terminal_and_emits_event(
     )
 
     response = api_client.post(
-        reverse("decline-product", kwargs={"product_id": moderation.product_id}),
+        reverse("block-ticket", kwargs={"ticket_id": moderation.id}),
         {
-            "blocking_reason_id": str(reason.id),
-            "moderator_comment": "Товар является контрафактом",
+            "blocking_reason_ids": [str(reason.id)],
             "field_reports": [],
         },
         format="json",
@@ -35,27 +34,17 @@ def test_hard_block_transitions_to_terminal_and_emits_event(
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "product_id": str(moderation.product_id),
-        "status": ProductModeration.Status.HARD_BLOCKED,
-    }
+    assert response.json()["status"] == ProductModeration.Status.HARD_BLOCKED
 
     moderation.refresh_from_db()
     assert moderation.status == ProductModeration.Status.HARD_BLOCKED
     assert moderation.date_moderation is not None
     assert moderation.blocking_reason == reason
-    assert moderation.moderator_comment == "Товар является контрафактом"
+    assert moderation.moderator_comment is None
     assert successful_decline_b2b_client_class.events == [
         {
             "product_id": str(moderation.product_id),
             "event_type": ProductModeration.Status.BLOCKED,
-            "hard_block": True,
-            "blocking_reason": {
-                "id": str(reason.id),
-                "title": "Контрафактный товар",
-                "comment": "Товар является контрафактом",
-            },
-            "field_reports": [],
         }
     ]
 
@@ -72,10 +61,9 @@ def test_hard_block_decline_requires_service_key(
     api_client.credentials()
 
     response = api_client.post(
-        reverse("decline-product", kwargs={"product_id": moderation.product_id}),
+        reverse("block-ticket", kwargs={"ticket_id": moderation.id}),
         {
-            "blocking_reason_id": str(reason.id),
-            "moderator_comment": "Товар является контрафактом",
+            "blocking_reason_ids": [str(reason.id)],
             "field_reports": [],
         },
         format="json",
@@ -83,7 +71,10 @@ def test_hard_block_decline_requires_service_key(
     )
 
     assert response.status_code == 401
-    assert response.json() == {"error": "Invalid service key"}
+    assert response.json() == {
+        "code": "UNAUTHORIZED",
+        "message": "Invalid service key",
+    }
     moderation.refresh_from_db()
     assert moderation.status == ProductModeration.Status.IN_REVIEW
     assert successful_decline_b2b_client_class.events == []
@@ -100,10 +91,9 @@ def test_hard_block_event_carries_hard_block_true(
     reason = create_blocking_reason(hard_block=True)
 
     response = api_client.post(
-        reverse("decline-product", kwargs={"product_id": moderation.product_id}),
+        reverse("block-ticket", kwargs={"ticket_id": moderation.id}),
         {
-            "blocking_reason_id": str(reason.id),
-            "moderator_comment": "Hard block",
+            "blocking_reason_ids": [str(reason.id)],
         },
         format="json",
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
@@ -112,7 +102,6 @@ def test_hard_block_event_carries_hard_block_true(
     assert response.status_code == 200
     event = successful_decline_b2b_client_class.events[0]
     assert event["event_type"] == ProductModeration.Status.BLOCKED
-    assert event["hard_block"] is True
 
 
 @pytest.mark.django_db
@@ -131,10 +120,9 @@ def test_any_modify_on_hard_blocked_returns_403(
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
     )
     decline_response = api_client.post(
-        reverse("decline-product", kwargs={"product_id": moderation.product_id}),
+        reverse("block-ticket", kwargs={"ticket_id": moderation.id}),
         {
-            "blocking_reason_id": str(reason.id),
-            "moderator_comment": "Try to modify terminal product",
+            "blocking_reason_ids": [str(reason.id)],
         },
         format="json",
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),

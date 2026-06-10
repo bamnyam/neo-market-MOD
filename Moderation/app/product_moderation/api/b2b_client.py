@@ -42,10 +42,6 @@ class B2BClient:
         self,
         product_id: str,
         event_type: str,
-        *,
-        hard_block: bool | None = None,
-        blocking_reason: dict[str, Any] | None = None,
-        field_reports: list[dict[str, Any]] | None = None,
     ) -> None:
         payload_data: dict[str, Any] = {
             "event_type": event_type,
@@ -53,12 +49,6 @@ class B2BClient:
             "occurred_at": timezone.now().isoformat().replace("+00:00", "Z"),
             "product_id": product_id,
         }
-        if hard_block is not None:
-            payload_data["hard_block"] = hard_block
-        if blocking_reason is not None:
-            payload_data["blocking_reason"] = blocking_reason
-        if field_reports is not None:
-            payload_data["field_reports"] = field_reports
 
         payload = json.dumps(payload_data).encode("utf-8")
         request = Request(
