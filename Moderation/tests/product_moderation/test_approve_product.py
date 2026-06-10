@@ -56,7 +56,10 @@ def test_approve_product_not_found(api_client):
     )
 
     assert response.status_code == 404
-    assert response.json() == {"code": "TICKET_NOT_FOUND", "message": "Ticket not found"}
+    assert response.json() == {
+        "code": "TICKET_NOT_FOUND",
+        "message": "Ticket not found",
+    }
 
 
 @pytest.mark.django_db
@@ -70,8 +73,11 @@ def test_approve_product_rejects_hard_blocked(api_client, create_moderation):
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
     )
 
-    assert response.status_code == 403
-    assert response.json() == {"error": "Product is permanently blocked"}
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "TICKET_PERMANENTLY_BLOCKED",
+        "message": "Product is permanently blocked",
+    }
 
 
 @pytest.mark.django_db
@@ -86,7 +92,10 @@ def test_approve_product_rejects_not_in_review(api_client, create_moderation):
     )
 
     assert response.status_code == 409
-    assert response.json() == {"error": "Product is not in review"}
+    assert response.json() == {
+        "code": "TICKET_WRONG_STATUS",
+        "message": "Ticket is not in review status",
+    }
 
 
 @pytest.mark.django_db
@@ -152,6 +161,10 @@ def test_approve_product_rolls_back_when_event_fails(
     )
 
     assert response.status_code == 500
+    assert response.json() == {
+        "code": "B2B_EVENT_FAILED",
+        "message": "Failed to send moderation event to B2B",
+    }
 
     moderation.refresh_from_db()
     assert moderation.status == ProductModeration.Status.IN_REVIEW

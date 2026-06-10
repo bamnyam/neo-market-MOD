@@ -71,7 +71,7 @@ def test_decline_product_success(
     assert successful_decline_b2b_client_class.events == [
         {
             "product_id": str(moderation.product_id),
-            "status": ProductModeration.Status.BLOCKED,
+            "event_type": ProductModeration.Status.BLOCKED,
             "hard_block": False,
             "blocking_reason": {
                 "id": str(reason.id),
@@ -131,7 +131,7 @@ def test_decline_product_rejects_hard_blocked_status(
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 409
     assert response.json() == {"error": "Product is permanently blocked"}
 
 
@@ -154,8 +154,8 @@ def test_decline_product_rejects_other_moderator(
         HTTP_X_MODERATOR_ID=str(uuid.uuid4()),
     )
 
-    assert response.status_code == 403
-    assert response.json() == {"error": "This moderation card is not assigned to you"}
+    assert response.status_code == 409
+    assert response.json() == {"error": "This ticket is not assigned to you"}
 
 
 @pytest.mark.django_db
@@ -178,7 +178,7 @@ def test_decline_product_rejects_not_in_review(
     )
 
     assert response.status_code == 409
-    assert response.json() == {"error": "Product is not in review"}
+    assert response.json() == {"error": "Ticket is not in review status"}
 
 
 @pytest.mark.django_db
@@ -226,7 +226,7 @@ def test_decline_product_uses_hard_block_reason(
     }
     moderation.refresh_from_db()
     assert moderation.status == ProductModeration.Status.HARD_BLOCKED
-    assert successful_decline_b2b_client_class.events[0]["status"] == (
+    assert successful_decline_b2b_client_class.events[0]["event_type"] == (
         ProductModeration.Status.BLOCKED
     )
     assert successful_decline_b2b_client_class.events[0]["hard_block"] is True

@@ -48,7 +48,7 @@ def test_hard_block_transitions_to_terminal_and_emits_event(
     assert successful_decline_b2b_client_class.events == [
         {
             "product_id": str(moderation.product_id),
-            "status": ProductModeration.Status.BLOCKED,
+            "event_type": ProductModeration.Status.BLOCKED,
             "hard_block": True,
             "blocking_reason": {
                 "id": str(reason.id),
@@ -111,7 +111,7 @@ def test_hard_block_event_carries_hard_block_true(
 
     assert response.status_code == 200
     event = successful_decline_b2b_client_class.events[0]
-    assert event["status"] == ProductModeration.Status.BLOCKED
+    assert event["event_type"] == ProductModeration.Status.BLOCKED
     assert event["hard_block"] is True
 
 
@@ -125,7 +125,7 @@ def test_any_modify_on_hard_blocked_returns_403(
     reason = create_blocking_reason()
 
     approve_response = api_client.post(
-        reverse("approve-product", kwargs={"product_id": moderation.product_id}),
+        reverse("approve-product", kwargs={"ticket_id": moderation.id}),
         {},
         format="json",
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
@@ -140,8 +140,8 @@ def test_any_modify_on_hard_blocked_returns_403(
         HTTP_X_MODERATOR_ID=str(moderation.moderator_id),
     )
 
-    assert approve_response.status_code == 403
-    assert decline_response.status_code == 403
+    assert approve_response.status_code == 409
+    assert decline_response.status_code == 409
     moderation.refresh_from_db()
     assert moderation.status == ProductModeration.Status.HARD_BLOCKED
 
